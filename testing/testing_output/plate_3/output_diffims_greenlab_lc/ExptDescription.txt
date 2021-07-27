@@ -1,2 +1,0 @@
-Barcode	Start.Time	Treatment	Medium	Screen	Library	Plate	RepQuad
-0XXXXXXXXXX	2021-05-04_16-51-00	1	YPD	miki_screen	CBS138	1	1
