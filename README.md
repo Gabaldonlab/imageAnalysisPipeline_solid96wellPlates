@@ -29,18 +29,23 @@ You have to install some extra dependencies which don't go by conda. First for t
 `conda activate colonyzer_fitness_env`
 
 `pip install Colonyzer2`
+
 `pip install pygame`
+
 `pip install sobol`
 
 Then install some R packages in the `colonyzer_fitness_env_run`. First initialize R:
 
 `conda activate colonyzer_fitness_env_run`
+
 `R`
 
 Then install some packages:
 
 `install.packages("DEoptim", repos="https://CRAN.R-project.org")`
+
 `install.packages("optparse")`
+
 `install.packages("qfa", repos="http://R-Forge.R-project.org")`
 
 Exit R (you don't need to save the workspace):
@@ -73,10 +78,10 @@ At the end this will create some files in `./testing/testing_output` with the re
 
 There are two types of fitness estimates (found in the `integrated_data_allPlates.tbl` file) calculated from the data:
 
-- Model-based fitness measurements: these are estimated by fitting a generalised logistic model (http://en.wikipedia.org/wiki/Generalised_logistic_function#Generalised_logistic_differential_equation) to the time-vs-cell density curve. The model parameters gives us different fitness estimates. These estimates can be useful if we have some spots that did not reach stationary phase (to predict maximum cell density, for example) or we have mixed samples with different growth times. These don't work well if we have slow-growing spots or non-logistic curves (which may happen because there is cell death after reaching stationary phase). `K`, `r`, `g`, `v`, `MDR`, `MDP`, `DT`, `AUC`, `MDRMDP`, `rsquare` (see below) are related to such model fitting.
+- Model-based fitness measurements: these are estimated by fitting a generalised logistic model (http://en.wikipedia.org/wiki/Generalised_logistic_function#Generalised_logistic_differential_equation) to the time-vs-cell density curve. The model parameters give us different fitness estimates. These estimates can be useful if we have some spots that did not reach stationary phase (to predict maximum cell density, for example) or we have mixed samples with different growth times. These don't work well if we have slow-growing spots or non-logistic curves (which may happen because there is cell death after reaching stationary phase). `K`, `r`, `g`, `v`, `MDR`, `MDP`, `DT`, `AUC`, `MDRMDP`, `rsquare` (see below) are related to such model fitting.
 
 
-- Non parametric fitness measuremenets: these are calculated directly from the data, without assuming any underlying growth model.I'd generally use these if we have experiments with the same growth times. `nAUC`, `nr`, `maxslp`, `maxslp_t`, `DT_h` and `DT_h_goodR2` (see below) are non-parametric measurements.
+- Non parametric (or numeric) fitness measuremenets: these are calculated directly from the data, without assuming any underlying growth model. I generally use these (`nAUC` and `DT_h`) if we have experiments with the same growth times. `nAUC`, `nr`, `maxslp`, `maxslp_t`, `DT_h` and `DT_h_goodR2` (see below) are non-parametric measurements.
 
 The pipeline outputs many files under directory specified with `--output`:
 
@@ -104,12 +109,13 @@ The pipeline outputs many files under directory specified with `--output`:
 
 	- `DT_h` is a numerical estimate for the maximum doubling time, in hours. `DT_h_goodR2` is the same value but only for those spots with a good model fit (rsquare>0.95). For poorly fit curves the `DT_h_goodR2` is set to 25.0 (very high). This `DT_h_goodR2` can be used to have as non-growing the samples with weird curves.
 
--
+- `plate_*/comparativeAnalysisPlots_0XXXXXXXXXX_valuesPerWell.pdf` is a heatmap plot with the fitness values per spot for different fitness estimates. There is one such plot per plate.
 
+- `plate_*/comparativeAnalysisPlots_corrMat.pdf` is a heatmap with the correlation between the different fitness estimates across all wells. There is one such plot per plate.
 
+- `plate_*/output_diffims_greenlab_lc/output_plots.pdf` has the growth curves with the model fitting. There is one such plot per plate.
 
-
-
+- `plots/` includes several violinplots that describe the general trends in the 4 plates. The name of the plot indicates how is the violin plot organized. For example `plots/onlyDifLcGl_x=strain_hue=plate.pdf` is a plot where the x values are different strains and the colors (hue) indicate the plate number. These are automatic plots, which means that they won't be beautiful if there are a lot of different strains. They are just useful to scroll and have an overal description of the data. You can make any plots we have with the data in  `integrated_data_allPlates.tbl`.
 
 ## Misc comments
 
