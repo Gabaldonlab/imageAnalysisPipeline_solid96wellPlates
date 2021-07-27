@@ -1,0 +1,20 @@
+name: colonyzer_fitness_env_run
+channels:
+  - conda-forge
+  - bioconda
+  - anaconda
+  - defaults
+dependencies:
+  - python=3.6
+  - pandas
+  - biopython
+  - r-sp
+  - r-quantreg
+  - r-jpeg
+  - spyder
+  - matplotlib=3.3.0
+  - seaborn
+  - r-knitr
+  - xlrd
+  - r-argparser
+prefix: /gpfs/projects/bsc40/mschikora/anaconda3/envs/colonyzer_fitness_env_run

@@ -1,0 +1,14 @@
+name: colonyzer_fitness_env
+channels:
+  - conda-forge
+  - bioconda
+  - anaconda
+  - defaults
+dependencies:
+  - python=2.7
+  - matplotlib
+  - pandas
+  - scipy
+  - pillow
+  - opencv
+prefix: /gpfs/projects/bsc40/mschikora/anaconda3/envs/colonyzer_fitness_env
