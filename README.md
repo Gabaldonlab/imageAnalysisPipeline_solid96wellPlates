@@ -155,7 +155,7 @@ This script will generate two files:
 
 - `./testing/testing_output_susceptibility/susceptibility_measurements.tab`. Each row includes several susceptibility measurements for each `condition` (or drug), `sampleID` (which is a combination of `strain` and `replicateID`) and `fitness_estimate`. These the important columns:
 
-	- `fitness_estimate` indicates, for each row, which is the fitness estimate in which the MIC and rAUC values (see below) were calcualted. This table includes several RELATIVE estimates (`K`, `r`, `nr`, `maxslp`, `MDP`, `MDR`, `MDRMDP`, `DT`, `AUC`, `DT_h`, `nAUC` and `DT_h_goodR2`) and their corresponding ABSOLUTE estimates (`K_rel`, `r_rel`, `nr_rel`, `maxslp_rel`, `MDP_rel`, `MDR_rel`, `MDRMDP_rel`, `DT_rel`, `AUC_rel`, `DT_h_rel`, `nAUC_rel` and `DT_h_goodR2_rel`)
+	- `fitness_estimate` indicates, for each row, which is the fitness estimate in which the MIC and rAUC values (see below) were calcualted. This table includes several ABSOLUTE estimates (`K`, `r`, `nr`, `maxslp`, `MDP`, `MDR`, `MDRMDP`, `DT`, `AUC`, `DT_h`, `nAUC` and `DT_h_goodR2`) and their corresponding RELATIVE estimates (`K_rel`, `r_rel`, `nr_rel`, `maxslp_rel`, `MDP_rel`, `MDR_rel`, `MDRMDP_rel`, `DT_rel`, `AUC_rel`, `DT_h_rel`, `nAUC_rel` and `DT_h_goodR2_rel`)
 
 	- `MIC_*` is, for a given fitness_estimate, the minimum concentration at which you have a fitness<0.5, <0.75 or <0.90 (dependnig on the %). Note that this is only meaningful (in terms of drug susceptibility) for RELATIVE fitness estimates (those that are called like `*_rel`), where the fitness values are normalised to the `concentration`==0.
 
