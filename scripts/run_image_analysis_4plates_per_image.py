@@ -193,3 +193,5 @@ if opt.metadata_file is not None:
     df_only_good = all_df[(all_df.type_calculation=="diffims_greenlab_lc") & (all_df.apply(lambda r: "blank" not in r, axis=1))]
     fun.generate_plots_many_plates(df_only_good, metadata_fields, fileprefix="%s/onlyDifLcGl"%(PlotsDir), interesting_GRestimates=interesting_GRestimates)
 
+
+print("Congratulations!!! The pipeline was run correctly.")

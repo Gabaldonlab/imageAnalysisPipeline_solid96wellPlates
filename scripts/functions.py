@@ -14,6 +14,7 @@ from Bio.SeqRecord import SeqRecord
 import pickle
 import itertools
 from matplotlib import pyplot as plt
+from sklearn.metrics import auc
 import seaborn as sns
 import itertools
 
@@ -386,9 +387,242 @@ def generate_plots_many_plates(df, metadata_fields, fileprefix, interesting_GRes
             fig.savefig(filename, bbox_inches='tight')
             plt.close(fig)
 
+def get_fitness_df_with_relativeFitnessEstimates(fitness_df, fitness_estimates):
 
+    """This function adds a set of *_rel fields to fitness_df, which are, for each condition, the fitness relative to the concentration==0 spot."""
+
+    print("adding relative fitness to concentration==0")
+
+    # correct the fitness estimates to avoid NaNs, 0s and infs
+    fitEstimate_to_maxNoNInf = {fe : max(fitness_df[fitness_df[fe]!=np.inf][fe]) for fe in fitness_estimates}
+
+    def get_correct_val(x, fitness_estimate):
+        
+        if x==np.inf: return fitEstimate_to_maxNoNInf[fitness_estimate]
+        elif x!=np.nan and type(x)==float: return x
+        else: raise ValueError("%s is not a valid %s"%(x, fitness_estimate))
+        
+    for fe in fitness_estimates: 
+        
+        # get the non nan vals
+        fitness_df[fe] = fitness_df[fe].apply(lambda x: get_correct_val(x, fe))
+        
+        # add a pseudocount that is equivalent to the minimum, if there are any non negative values
+        if any(fitness_df[fe]<0): 
+            print("WARNING: There are some negative values in %s, modifying the data with a pseudocount"%fe)
+            fitness_df[fe] = fitness_df[fe] + abs(min(fitness_df[fitness_df[fe]<0][fe]))    
+
+    # define a df with the maximum growth rate (the one at concentration==0) for each combination of sampleID and assayed drugs
+    df_max_gr = fitness_df[fitness_df.concentration==0.0].set_index("sampleID_and_condition", drop=False)[fitness_estimates]
+    all_sampleID_and_condition = set(df_max_gr.index)
+
+    fitEstimate_to_sampleIDandCondition_to_maxValue = {fe : {sampleIDandCondition : df_max_gr.loc[sampleIDandCondition, fe] for sampleIDandCondition in all_sampleID_and_condition} for fe in fitness_estimates}
+
+    # add the relative fitness estimates
+    fitness_estimates_rel = ["%s_rel"%x for x in fitness_estimates]
+
+    def get_btw_0_and_1(x):
             
+        if pd.isna(x): return 1.0
+        elif x==np.inf: return 1.0
+        elif x==-np.inf: return 0.0
+        elif x<0: raise ValueError("there can't be any negative values")
+        else: return x 
+
+    fitness_df[fitness_estimates_rel] = fitness_df.apply(lambda r: pd.Series({"%s_rel"%fe : get_btw_0_and_1(np.divide(r[fe], fitEstimate_to_sampleIDandCondition_to_maxValue[fe][r["sampleID_and_condition"]])) for fe in fitness_estimates}), axis=1)
+
+    return fitness_df
+
+
+def get_MIC_for_EUCASTreplicate(df, fitness_estimate, concs_info, mic_fraction=0.5):
+
+    """This function takes a df of one single eucast measurement, and returns the Minimal Inhibitory concentration, where the relative fitness is fitness_estimate, The df should be sorted by concentration."""
+
+    # get the expected concs
+    max_expected_conc = concs_info["max_conc"]
+    first_concentration = concs_info["first_conc"]
+    expected_conc_to_previous_conc = concs_info["conc_to_previous_conc"]
+
+    # get the assayed concs
+    assayed_concs = set(df.concentration)
+
+    # calculate MIC
+    concentrations_less_than_mic_fraction = df[df[fitness_estimate]<mic_fraction]["concentration"]
+
+    # define a string for the warnings
+    mic_string = "sampleID=%s|fitness_estimate=%s|MIC_%.2f"%(df.sampleID.iloc[0], fitness_estimate, mic_fraction)
+
+    # define the real mic according to missing data
+
+    # when there is no mic conc
+    if len(concentrations_less_than_mic_fraction)==0:
+
+        # when the max conc has been considered and no mic is found
+        if max_expected_conc in assayed_concs: real_mic = (max_expected_conc*2)
+
+        # else we can't know were the mic is
+        else: 
+            print("WARNING: There is no MIC, but the last concentration was not assayed for %s. MIC is set to NaN"%mic_string)
+            real_mic = np.nan
+
+    # when there is one
+    else:
+
+        # calculate the mic
+        mic = concentrations_less_than_mic_fraction.min()
+
+        # calculate the concentration before the mic
+        df_conc_before_mic = df[df.concentration<mic]
+
+        # when there is no such df, just keep the mic if there is only the first assayed concentration 
+        if len(df_conc_before_mic)==0: 
+
+            # if the mic is the first concentration or the first concentration is already below 0.5
+            if mic==first_concentration: real_mic = mic    
+            elif mic==0.0: real_mic = 0.01          
+            else: 
+                print("WARNING: We cound not find MIC for %s"%mic_string)
+                real_mic = np.nan
+
+        else:
+
+            # get the known or expected concentrations
+            conc_before_mic = df_conc_before_mic.iloc[-1].concentration
+            expected_conc_before_mic = expected_conc_to_previous_conc[mic]
+
+            # if the concentration before mic is not the expected one, just not consider
+            if abs(conc_before_mic-expected_conc_before_mic)>=0.001: 
+                print("WARNING: We cound not find MIC for %s"%mic_string)
+                real_mic = np.nan
+            else: real_mic = mic
+
+    # if there is any missing 
+    if real_mic==0: raise ValueError("mic can't be 0. Check how you calculate %s"%fitness_estimate)
+
+    # debug
+    """
+    if pd.isna(real_mic):
+        print(df)
+        raise ValueError("MIC can't be nan")
+    """
+
+    return real_mic
+
+
+def get_auc(x, y):
+
+    """Takes an x and a y and returns the area under the curve"""
+
+    return auc(x, y)
+
+
+def get_AUC_for_EUCASTreplicate(df, fitness_estimate, concs_info, concentration_estimate, min_points_to_calculate_auc=4):
+
+    """Takes a df were each row has info about a curve of a single EUCAST and returns the AUC with some corrections"""
+
+    # get the expected concs
+    max_expected_conc = concs_info["max_conc"]
+    conc0 = concs_info["zero_conc"] 
+
+    # calculate the auc if all the concentrations had a fitness of 1 (which is equal to no-drug if the fitness_estimate=1)
+    max_auc = (max_expected_conc-conc0)*1
+
+    # get the assayed concs
+    assayed_concs = set(df[concentration_estimate])
+
+    # when you lack less than 4 curves just drop
+    if len(df)<min_points_to_calculate_auc: auc = np.nan
+
+    # when they are all 0, just return 0
+    elif sum(df[fitness_estimate]==0.0)==len(df): auc = 0.0
+
+    else:
+
+        # if the maximum growth is not measured, and the max measured is growing we discard the measurement, as it may change the results
+        if max_expected_conc not in assayed_concs and df.iloc[-1].is_growing: auc = np.nan
+
+        else:
+
+            # get the values
+            xvalues = df[concentration_estimate].values
+            yvalues = df[fitness_estimate].values
+
+            # if the initial is the first concentration, add the one
+            if conc0 not in assayed_concs:
+                xvalues = np.insert(xvalues, 0, conc0)
+                yvalues = np.insert(yvalues, 0, 1.0)
+
+            # calculate auc, relattive to the 
+            auc = get_auc(xvalues, yvalues)/max_auc
+
+
+    if auc<0.0: 
+
+        print(df[[concentration_estimate, fitness_estimate, "is_growing"]])
+        print(xvalues, yvalues)
+        print(assayed_concs, conc0)
+        raise ValueError("auc can't be 0. Check how you calculate %s"%fitness_estimate)
+
+    return auc
 
 
 
-    
+def get_susceptibility_df(fitness_df, fitness_estimates, pseudocount_log2_concentration, min_points_to_calculate_auc):
+
+    """Takes a fitness df and returns a df where each row is one sampleID-drug-fitness_estimate combination and there are susceptibility measurements (rAUC, MIC or initial fitness)"""
+
+    # init the df that will contain the susceptibility estimates
+    df_all = pd.DataFrame()
+
+    # go through each condition
+    for condition in sorted(set(fitness_df.condition)):
+        print("getting susceptibility estimates for %s"%condition)
+
+        # get the df
+        fitness_df_c = fitness_df[fitness_df.condition==condition]
+
+        # map each drug to the expected concentrations
+        sorted_concentrations = sorted(set(fitness_df_c.concentration))
+        concentrations_dict = {"max_conc":max(sorted_concentrations), "zero_conc":sorted_concentrations[0], "first_conc":sorted_concentrations[1], "conc_to_previous_conc":{c:sorted_concentrations[I-1] for I,c in enumerate(sorted_concentrations) if I>0}}
+
+        sorted_log2_concentrations = [np.log2(c + pseudocount_log2_concentration) for c in sorted_concentrations]
+        concentrations_dict_log2 = {"max_conc":max(sorted_log2_concentrations), "zero_conc":sorted_log2_concentrations[0], "first_conc":sorted_log2_concentrations[1], "conc_to_previous_conc":{c:sorted_log2_concentrations[I-1] for I,c in enumerate(sorted_log2_concentrations) if I>0}}
+
+        # filter out bad spots
+        fitness_df_c = fitness_df_c[~(fitness_df_c.bad_spot)]
+
+        # go through all the fitness estimates (also the relative ones)
+        for fitness_estimate in (fitness_estimates + ["%s_rel"%f for f in fitness_estimates]):
+            print("fitness_estimate:", fitness_estimate)
+
+            # define a grouped df, where each index is a unique sample ID
+            grouped_df = fitness_df_c[["sampleID", "concentration", "is_growing", "log2_concentration", fitness_estimate]].sort_values    (by=["sampleID", "concentration"]).groupby("sampleID")
+
+            # init a df with the MICs and AUCs for this concentration and fitness_estimate
+            df_f = pd.DataFrame()
+
+            # go through different MIC fractions
+            for mic_fraction in [0.5, 0.75, 0.9]:
+
+                df_f["MIC_%i"%(mic_fraction*100)] = grouped_df.apply(lambda x: get_MIC_for_EUCASTreplicate(x, fitness_estimate, concentrations_dict, mic_fraction=mic_fraction))
+
+            # add the rAUC for log2 or not of the concentrations
+            for conc_estimate, conc_info_dict in [("concentration", concentrations_dict), ("log2_concentration", concentrations_dict_log2)]:
+
+                # get a series that map each sampleID to the AUC 
+                df_f["rAUC_%s"%conc_estimate] = grouped_df.apply(lambda x: get_AUC_for_EUCASTreplicate(x, fitness_estimate, conc_info_dict, conc_estimate, min_points_to_calculate_auc=min_points_to_calculate_auc))
+
+            # define the df for the initial fitness
+            df_conc0 = fitness_df_c[(fitness_df_c["concentration"]==0.0)]
+            df_f["fitness_conc0"] = df_conc0[["sampleID", fitness_estimate]].drop_duplicates().set_index("sampleID")[fitness_estimate]
+
+
+            # keep df
+            df_f = df_f.merge(fitness_df_c[["sampleID", "strain", "replicateID", "row", "column"]].set_index("sampleID").drop_duplicates(),  left_index=True, right_index=True, how="left",  validate="one_to_one")
+
+            df_f["condition"] = condition
+            df_f["fitness_estimate"] = fitness_estimate
+            df_all = df_all.append(df_f)
+
+    return df_all
+

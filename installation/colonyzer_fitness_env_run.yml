@@ -17,4 +17,5 @@ dependencies:
   - r-knitr
   - xlrd
   - r-argparser
+  - scikit-learn=0.24
 prefix: /gpfs/projects/bsc40/mschikora/anaconda3/envs/colonyzer_fitness_env_run
